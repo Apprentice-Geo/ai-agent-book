@@ -107,7 +107,11 @@ class AttentionTracker(LogitsProcessor):
         # Track generated token
         if input_ids.shape[1] > self.context_length:
             last_token_id = input_ids[0, -1].item()
-            last_token = decode_token_labels(self.tokenizer, input_ids[0].tolist())[-1]
+            # Generation is still in progress, so the sequence is a growing
+            # prefix: leave pending UTF-8 bytes buffered for the next token.
+            last_token = decode_token_labels(
+                self.tokenizer, input_ids[0].tolist(), final=False
+            )[-1]
             current_position = input_ids.shape[1] - 1
             
             self.generated_tokens.append({

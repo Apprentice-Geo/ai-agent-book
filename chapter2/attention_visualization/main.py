@@ -131,6 +131,19 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
         generated_ids = []
         generated_text = ""
         attention_weights = [] if track_attention else None
+
+        def final_text() -> str:
+            """Rebuild the text from the complete token IDs, flushing pending bytes.
+
+            ``generated_text`` below is accumulated from prefix decodes
+            (``final=False``), so an incomplete trailing UTF-8 character is
+            deliberately left buffered while streaming. Recomputing from the
+            whole ``generated_ids`` with ``final=True`` surfaces those bytes
+            instead of dropping them, and avoids appending the last label twice.
+            """
+            return "".join(
+                decode_token_labels(self.tokenizer, generated_ids, final=True)
+            )
         
         if verbose:
             print(f"📊 Input: {input_length} tokens | Max new: {max_new_tokens}")
@@ -174,9 +187,10 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
                     break
                 
                 # Decode in sequence so a UTF-8 character split across tokens
-                # appears when its final byte arrives.
+                # appears when its final byte arrives. This is still a growing
+                # prefix, so do not flush pending bytes yet.
                 generated_ids.append(next_token_id)
-                token_text = decode_token_labels(self.tokenizer, generated_ids)[-1]
+                token_text = decode_token_labels(self.tokenizer, generated_ids, final=False)[-1]
                 generated_text += token_text
                 
                 if verbose:
@@ -194,7 +208,8 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
                         if verbose:
                             print(f"\n🛑 [Stop string detected: {stop_str}]", flush=True)
                             print(f"📈 Generated {len(generated_ids)} tokens")
-                        return generated_text[:generated_text.index(stop_str)], attention_weights
+                        stop_index = generated_text.index(stop_str)
+                        return final_text()[:stop_index], attention_weights
                 
                 # Update input for next iteration
                 input_ids = torch.tensor([[next_token_id]], device=self.device)
@@ -204,7 +219,7 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
             print(f"\n{'-' * 60}")
             print(f"📈 Total generated: {len(generated_ids)} tokens")
         
-        return generated_text, attention_weights
+        return final_text(), attention_weights
     
     def generate_with_attention_streaming(
         self,

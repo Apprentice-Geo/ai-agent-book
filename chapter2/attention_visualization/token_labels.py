@@ -17,11 +17,25 @@ def _byte_decoder() -> dict[str, int]:
 BYTE_DECODER = _byte_decoder()
 
 
-def decode_token_labels(tokenizer, token_ids: list[int]) -> list[str]:
+def decode_token_labels(
+    tokenizer,
+    token_ids: list[int],
+    *,
+    final: bool = True,
+) -> list[str]:
     """Decode byte-level tokens in order, assigning a character to its final byte.
 
     Each returned label still represents exactly one token position. Other
     tokenizer families retain their ordinary per-token decoding behavior.
+
+    Args:
+        final: Whether ``token_ids`` is a complete token sequence. ``True``
+            (the default) flushes any pending UTF-8 bytes at the end, so a
+            genuinely truncated sequence still surfaces a replacement
+            character. Streaming/prefix callers pass ``False`` so an
+            incomplete trailing character stays buffered until the token that
+            completes it arrives instead of being emitted as "�" and then
+            duplicated.
     """
     decoder = getattr(getattr(tokenizer, "backend_tokenizer", None), "decoder", None)
     if decoder is None or type(decoder).__name__ != "ByteLevel":
@@ -49,6 +63,6 @@ def decode_token_labels(tokenizer, token_ids: list[int]) -> list[str]:
             continue
         labels.append(utf8.decode(raw_bytes, final=False))
 
-    if labels:
+    if final and labels:
         labels[-1] += utf8.decode(b"", final=True)
     return labels
