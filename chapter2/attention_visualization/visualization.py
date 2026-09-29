@@ -416,30 +416,46 @@ def visualize_results(
     print(f"Visualizations saved to {output_path}")
 
 
+_SPACE_LABEL = "␣"
+_CONTINUATION_LABEL = "↳"
+
+
 def clean_token_labels(tokens: List[str], max_len: int = 14) -> List[str]:
     """
     Make raw tokenizer tokens readable as axis labels.
 
     Replaces whitespace with visible glyphs and truncates very long
     special tokens so the heatmap axes stay legible.
+
+    An empty label is meaningful rather than missing: byte-level tokenizers
+    split a multi-byte UTF-8 character across tokens and
+    ``decode_token_labels`` assigns the character to the token that completes
+    it, leaving the earlier tokens empty. Such a continuation token is not a
+    space, so it gets its own marker instead of the space glyph.
     """
     cleaned = []
     for tok in tokens:
         label = tok.replace("\n", "\\n").replace("\t", "\\t")
-        # Qwen byte-level space marker and plain spaces -> visible middle dot
+        # Qwen byte-level space marker and plain spaces -> visible space glyph
         label = label.replace("Ġ", " ").replace("▁", " ")
-        if label.strip() == "":
-            label = "␣"
+        if label == "":
+            label = _CONTINUATION_LABEL
+        elif label.strip() == "":
+            label = _SPACE_LABEL
         if len(label) > max_len:
             label = label[:max_len - 1] + "…"
         cleaned.append(label)
     return cleaned
 
 
-def _set_space_label_font(ax) -> None:
-    """Render the visible-space marker even when the CJK font lacks it."""
+def _set_marker_label_font(ax) -> None:
+    """Render the space and continuation markers when the CJK font lacks them.
+
+    The CJK font chosen by ``_configure_cjk_font`` has neither U+2423 nor
+    U+21B3, so those ticks would otherwise render as tofu boxes.
+    """
     for tick in (*ax.get_xticklabels(), *ax.get_yticklabels()):
-        if tick.get_text() == "␣":
+        if tick.get_text() in (_SPACE_LABEL, _CONTINUATION_LABEL):
             tick.set_fontfamily("DejaVu Sans")
 
 
@@ -534,7 +550,7 @@ def create_layer_attention_heatmap(
     ax.set_xticklabels(tick_labels, rotation=90, fontsize=6)
     ax.set_yticks(ticks)
     ax.set_yticklabels(tick_labels, fontsize=6)
-    _set_space_label_font(ax)
+    _set_marker_label_font(ax)
 
     if context_boundary is not None and 0 < context_boundary < seq_len:
         ax.axvline(x=context_boundary - 0.5, color="red", linewidth=1.2,
@@ -605,7 +621,7 @@ def create_attention_comparison(
         ax.set_xticklabels([labels[i] for i in ticks], rotation=90, fontsize=5)
         ax.set_yticks(ticks)
         ax.set_yticklabels([labels[i] for i in ticks], fontsize=5)
-        _set_space_label_font(ax)
+        _set_marker_label_font(ax)
 
         stats = attention_sink_stats(matrix, sink_index=0)
         ax.set_title(f"{title}\nsink mean {stats['mean_sink_share'] * 100:.1f}%",
