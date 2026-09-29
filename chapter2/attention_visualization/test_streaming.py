@@ -23,9 +23,11 @@ BYTE_ENCODER = {byte: char for char, byte in BYTE_DECODER.items()}
 
 EOS_ID = 999
 SPECIAL_ID = 1000
+STOP_ID = 1001  # special token whose text is a stop string, not the EOS id
 
 # Byte splits observed with Qwen3's ByteLevel tokenizer.
 BEIJING = bytes.fromhex("E5 8C 97 E4 BA AC")  # 北京
+INCOMPLETE_TIAN_PREFIX = bytes.fromhex("E5 A4")  # first two bytes of 天
 SPACE_AND_PARTIAL_TIAN = bytes.fromhex("20 E5 A4")  # " " + first two bytes of 天
 PARTIAL_TIAN = bytes.fromhex("A9")  # final byte of 天
 TIAN_AND_PARTIAL_QI = bytes.fromhex("E5 A4 A9 E6 B0")  # 天 + first two bytes of 气
@@ -42,7 +44,7 @@ class FakeTokenizer:
     """ByteLevel tokenizer stand-in mapping each token ID to raw byte pieces."""
 
     backend_tokenizer = _Backend()
-    all_special_ids = (SPECIAL_ID,)  # tuple keeps the class attribute immutable
+    all_special_ids = (SPECIAL_ID, STOP_ID)  # tuple keeps the class attribute immutable
     eos_token_id = EOS_ID
     pad_token_id = None
 
@@ -58,6 +60,8 @@ class FakeTokenizer:
     def decode(self, token_ids, skip_special_tokens=False):
         if token_ids == [SPECIAL_ID]:
             return "<|im_start|>"
+        if token_ids == [STOP_ID]:
+            return "<|endoftext|>"
         if token_ids == [EOS_ID]:
             return "</s>"
         return self.pieces[token_ids[0]].decode("utf-8", errors="replace")
@@ -132,6 +136,15 @@ class EndOfStreamFlushTests(unittest.TestCase):
         text = run_generation(pieces, [1, 2], max_new_tokens=5)
         self.assertEqual(text, "北京")
         self.assertNotIn("\ufffd", text)
+
+    def test_special_stop_token_keeps_text_flushed_before_it(self):
+        # A partial UTF-8 character followed by a special stop token. Decoding
+        # flushes "�" into the label before the special token, but the streamed
+        # accumulation only appends the newest label, so generated_text never
+        # sees it. The stop offset must come from the finalized text, otherwise
+        # the flushed character is cut off and the result is empty.
+        text = run_generation({1: INCOMPLETE_TIAN_PREFIX}, [1, STOP_ID], max_new_tokens=5)
+        self.assertEqual(text, "\ufffd")
 
     def test_complete_generation_gets_no_spurious_replacement_character(self):
         text = run_generation(

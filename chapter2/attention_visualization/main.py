@@ -208,8 +208,12 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
                         if verbose:
                             print(f"\n🛑 [Stop string detected: {stop_str}]", flush=True)
                             print(f"📈 Generated {len(generated_ids)} tokens")
-                        stop_index = generated_text.index(stop_str)
-                        return final_text()[:stop_index], attention_weights
+                        # Index into the finalized text: a special token makes
+                        # decode_token_labels() flush pending bytes into an
+                        # earlier label, which shifts offsets relative to the
+                        # streamed generated_text.
+                        text = final_text()
+                        return text[:text.index(stop_str)], attention_weights
                 
                 # Update input for next iteration
                 input_ids = torch.tensor([[next_token_id]], device=self.device)
