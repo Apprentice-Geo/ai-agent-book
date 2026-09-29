@@ -12,6 +12,7 @@ from pathlib import Path
 
 from agent import AttentionVisualizationAgent, GenerationResult
 from tools import ToolRegistry
+from token_labels import decode_token_labels
 import time
 
 # Set up logging
@@ -172,14 +173,15 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
                         print(f"📈 Generated {len(generated_ids)} tokens total")
                     break
                 
-                # Decode and stream token
-                token_text = self.tokenizer.decode([next_token_id], skip_special_tokens=False)
+                # Decode in sequence so a UTF-8 character split across tokens
+                # appears when its final byte arrives.
                 generated_ids.append(next_token_id)
+                token_text = decode_token_labels(self.tokenizer, generated_ids)[-1]
                 generated_text += token_text
                 
                 if verbose:
                     # Stream token to console (skip special tokens for display)
-                    display_text = self.tokenizer.decode([next_token_id], skip_special_tokens=True)
+                    display_text = "" if next_token_id in self.tokenizer.all_special_ids else token_text
                     if display_text:  # Only print if there's visible text
                         if show_token_ids:
                             print(f"[{next_token_id}:{display_text}]", end="", flush=True)
@@ -240,11 +242,11 @@ class ReActAttentionAgent(AttentionVisualizationAgent):
         # Tokenize to get input and output tokens
         inputs = self.tokenizer(prompt, return_tensors="pt", truncation=False)
         input_token_ids = inputs['input_ids'][0].tolist()
-        input_tokens = [self.tokenizer.decode([tid], skip_special_tokens=False) for tid in input_token_ids]
+        input_tokens = decode_token_labels(self.tokenizer, input_token_ids)
         
         # Get output tokens and IDs
         output_token_ids = self.tokenizer(generated_text, return_tensors="pt", truncation=False)['input_ids'][0].tolist()
-        output_tokens = [self.tokenizer.decode([tid], skip_special_tokens=False) for tid in output_token_ids]
+        output_tokens = decode_token_labels(self.tokenizer, output_token_ids)
         
         # Now do a single forward pass to get the full attention matrix for the complete sequence
         full_text = prompt + generated_text

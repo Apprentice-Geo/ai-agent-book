@@ -436,6 +436,13 @@ def clean_token_labels(tokens: List[str], max_len: int = 14) -> List[str]:
     return cleaned
 
 
+def _set_space_label_font(ax) -> None:
+    """Render the visible-space marker even when the CJK font lacks it."""
+    for tick in (*ax.get_xticklabels(), *ax.get_yticklabels()):
+        if tick.get_text() == "␣":
+            tick.set_fontfamily("DejaVu Sans")
+
+
 def attention_sink_stats(attention_matrix: np.ndarray, sink_index: int = 0) -> Dict[str, float]:
     """
     Compute how much attention lands on a single "sink" column.
@@ -527,6 +534,7 @@ def create_layer_attention_heatmap(
     ax.set_xticklabels(tick_labels, rotation=90, fontsize=6)
     ax.set_yticks(ticks)
     ax.set_yticklabels(tick_labels, fontsize=6)
+    _set_space_label_font(ax)
 
     if context_boundary is not None and 0 < context_boundary < seq_len:
         ax.axvline(x=context_boundary - 0.5, color="red", linewidth=1.2,
@@ -597,6 +605,7 @@ def create_attention_comparison(
         ax.set_xticklabels([labels[i] for i in ticks], rotation=90, fontsize=5)
         ax.set_yticks(ticks)
         ax.set_yticklabels([labels[i] for i in ticks], fontsize=5)
+        _set_space_label_font(ax)
 
         stats = attention_sink_stats(matrix, sink_index=0)
         ax.set_title(f"{title}\nsink mean {stats['mean_sink_share'] * 100:.1f}%",
