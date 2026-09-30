@@ -12,7 +12,12 @@ import unittest
 
 import matplotlib.pyplot as plt
 import numpy as np
-from visualization import clean_token_labels, create_layer_attention_heatmap
+from visualization import (
+    clean_token_labels,
+    create_attention_flow_diagram,
+    create_attention_heatmap,
+    create_layer_attention_heatmap,
+)
 
 
 class CleanTokenLabelsTests(unittest.TestCase):
@@ -50,6 +55,29 @@ class HeatmapMarkerRenderingTests(unittest.TestCase):
             # The CJK font lacks U+2423/U+21B3, so the helper must switch fonts.
             self.assertEqual(ticks[0].get_fontfamily(), ["DejaVu Sans"])
             self.assertEqual(ticks[1].get_fontfamily(), ["DejaVu Sans"])
+        finally:
+            plt.close(fig)
+
+    def test_legacy_heatmap_marks_continuations_on_both_axes(self):
+        fig = create_attention_heatmap(
+            [[0.2, 0.3, 0.5]], ["", "天"], [""], context_boundary=2
+        )
+        try:
+            ax = fig.axes[0]
+            self.assertEqual([tick.get_text() for tick in ax.get_xticklabels()], ["↳", "天", "↳"])
+            self.assertEqual([tick.get_text() for tick in ax.get_yticklabels()], ["↳"])
+            self.assertEqual(ax.images[0].get_array().shape, (1, 3))
+        finally:
+            plt.close(fig)
+
+    def test_flow_step_title_marks_continuation(self):
+        fig = create_attention_flow_diagram(
+            [{"step": 1, "token": "", "attention_weights": [0.4, 0.6]}],
+            ["天"], context_length=1,
+        )
+        try:
+            self.assertIn("↳", fig.axes[0].get_title())
+            self.assertEqual(fig.axes[0].title.get_fontfamily(), ["DejaVu Sans"])
         finally:
             plt.close(fig)
 

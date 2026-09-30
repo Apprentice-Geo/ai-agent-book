@@ -84,7 +84,8 @@ def create_attention_heatmap(
     im = ax.imshow(attention_matrix, cmap=cmap, aspect='auto', vmin=0, vmax=1)
     
     # Set ticks and labels
-    all_tokens = input_tokens + output_tokens
+    all_tokens = clean_token_labels(input_tokens + output_tokens)
+    output_labels = all_tokens[len(input_tokens):]
     
     # X-axis (what is being attended to)
     ax.set_xticks(np.arange(len(all_tokens)))
@@ -92,7 +93,8 @@ def create_attention_heatmap(
     
     # Y-axis (generated tokens)
     ax.set_yticks(np.arange(len(output_tokens)))
-    ax.set_yticklabels(output_tokens, fontsize=10)
+    ax.set_yticklabels(output_labels, fontsize=10)
+    _set_marker_label_font(ax)
     
     # Add boundary line between input and output
     ax.axvline(x=context_boundary - 0.5, color='red', linewidth=2, linestyle='--', label='Input/Output Boundary')
@@ -185,7 +187,10 @@ def create_attention_flow_diagram(
             bars[i].set_linewidth(2)
         
         # Labels
-        ax.set_title(f"Step {step['step']}\nToken: '{step['token']}'", fontsize=10)
+        token_label = clean_token_labels([step['token']])[0]
+        ax.set_title(f"Step {step['step']}\nToken: '{token_label}'", fontsize=10)
+        if token_label in (_SPACE_LABEL, _CONTINUATION_LABEL):
+            ax.title.set_fontfamily("DejaVu Sans")
         ax.set_xlabel('Position', fontsize=8)
         if idx == 0:
             ax.set_ylabel('Attention Weight', fontsize=10)
